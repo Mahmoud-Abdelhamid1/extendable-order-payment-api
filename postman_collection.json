@@ -1,0 +1,193 @@
+{
+  "info": {
+    "name": "Order & Payment API",
+    "description": "Extendable Order and Payment Management API built with Laravel + Sanctum",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api" },
+    { "key": "token",    "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{base_url}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Register a new user and receive a Sanctum API token.\n\n**Success (201)**\n```json\n{\n  \"message\": \"Registration successful.\",\n  \"token\": \"1|abc123...\",\n  \"user\": { \"id\": 1, \"name\": \"John Doe\", \"email\": \"john@example.com\" }\n}\n```\n\n**Error (422) — email already taken**\n```json\n{\n  \"message\": \"The email has already been taken.\",\n  \"errors\": { \"email\": [\"The email has already been taken.\"] }\n}\n```"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) { pm.collectionVariables.set('token', json.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{base_url}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Login and receive a token. The test script auto-saves it to the `token` variable.\n\n**Success (200)**\n```json\n{\n  \"message\": \"Login successful.\",\n  \"token\": \"2|xyz789...\",\n  \"user\": { \"id\": 1, \"name\": \"John Doe\", \"email\": \"john@example.com\" }\n}\n```\n\n**Error (401)**\n```json\n{ \"message\": \"Invalid credentials.\" }\n```"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/logout",
+            "description": "Revoke the current token.\n\n**Success (200)**\n```json\n{ \"message\": \"Logged out successfully.\" }\n```"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"product_name\": \"Widget A\", \"quantity\": 2, \"price\": 10.00 },\n    { \"product_name\": \"Widget B\", \"quantity\": 1, \"price\": 25.00 }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Create a new order. Total is calculated server-side.\n\n**Success (201)**\n```json\n{\n  \"data\": {\n    \"id\": 1,\n    \"user_id\": 1,\n    \"status\": \"pending\",\n    \"total\": 45.00,\n    \"items\": [\n      { \"id\": 1, \"product_name\": \"Widget A\", \"quantity\": 2, \"price\": 10.00, \"subtotal\": 20.00 },\n      { \"id\": 2, \"product_name\": \"Widget B\", \"quantity\": 1, \"price\": 25.00, \"subtotal\": 25.00 }\n    ],\n    \"created_at\": \"2024-01-01T00:00:00.000000Z\"\n  }\n}\n```\n\n**Error (422) — empty items**\n```json\n{\n  \"message\": \"The items field is required.\",\n  \"errors\": { \"items\": [\"The items field is required.\"] }\n}\n```"
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders?status=pending",
+              "query": [{ "key": "status", "value": "pending", "description": "Filter: pending | confirmed | cancelled" }]
+            },
+            "description": "List all orders with optional status filter and pagination.\n\n**Success (200)**\n```json\n{\n  \"data\": [ ...orders... ],\n  \"meta\": { \"current_page\": 1, \"last_page\": 2, \"per_page\": 10, \"total\": 15 }\n}\n```"
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders/1",
+            "description": "Get a single order with items and payments.\n\n**Error (404)**\n```json\n{ \"message\": \"No query results for model [App\\\\Models\\\\Order] 999\" }\n```"
+          }
+        },
+        {
+          "name": "Update Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders/1",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update order status and/or replace items.\n\n**Success (200)**\n```json\n{\n  \"data\": { \"id\": 1, \"status\": \"confirmed\", ... }\n}\n```\n\n**Error (422) — invalid status**\n```json\n{\n  \"message\": \"The selected status is invalid.\",\n  \"errors\": { \"status\": [\"The selected status is invalid.\"] }\n}\n```"
+          }
+        },
+        {
+          "name": "Delete Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders/1",
+            "description": "Delete an order. Fails if payments exist.\n\n**Success (200)**\n```json\n{ \"message\": \"Order deleted successfully.\" }\n```\n\n**Error (422) — has payments**\n```json\n{ \"message\": \"Cannot delete an order that has associated payments.\" }\n```"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Process Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders/1/payments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"credit_card\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Process a payment for an order. Order must be `confirmed`.\n\nSupported methods: `credit_card`, `paypal`, `stripe`\n\n**Success (201)**\n```json\n{\n  \"data\": {\n    \"id\": 1,\n    \"order_id\": 1,\n    \"payment_method\": \"credit_card\",\n    \"status\": \"successful\",\n    \"gateway_response\": {\n      \"gateway\": \"credit_card\",\n      \"transaction_id\": \"CC-64F3A1B2C\",\n      \"amount\": 45.00,\n      \"currency\": \"USD\",\n      \"processed_at\": \"2024-01-01T12:00:00.000000Z\",\n      \"message\": \"Charge approved\"\n    },\n    \"created_at\": \"2024-01-01T12:00:00.000000Z\"\n  }\n}\n```\n\n**Error (422) — order not confirmed**\n```json\n{ \"message\": \"Payments can only be processed for confirmed orders.\" }\n```\n\n**Error (422) — unsupported method**\n```json\n{\n  \"message\": \"Unsupported payment method. Supported: credit_card, paypal, stripe.\",\n  \"errors\": { \"payment_method\": [\"Unsupported payment method...\"] }\n}\n```"
+          }
+        },
+        {
+          "name": "List Payments for Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/orders/1/payments",
+            "description": "Get all payments for a specific order (paginated)."
+          }
+        },
+        {
+          "name": "List All Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept",        "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payments",
+            "description": "Get all payments across all orders (paginated)."
+          }
+        }
+      ]
+    }
+  ]
+}

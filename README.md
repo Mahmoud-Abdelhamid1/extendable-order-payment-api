@@ -1,58 +1,187 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Order & Payment Management API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel REST API for managing orders and payments with a Strategy-pattern payment gateway system.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Setup
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Requirements
+- PHP 8.2+
+- Composer
+- MySQL / SQLite
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### Installation
 
 ```bash
-composer require laravel/boost --dev
+git clone <repo-url>
+cd order-payment-api
 
-php artisan boost:install
+composer install
+
+cp .env.example .env
+php artisan key:generate
+
+# Configure your DB in .env, then:
+php artisan migrate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### Running
 
-## Contributing
+```bash
+php artisan serve
+# API available at http://localhost:8000/api
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Testing
 
-## Code of Conduct
+```bash
+php artisan test
+# or with coverage:
+php artisan test --coverage
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## Authentication
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+The API uses **Laravel Sanctum** (token-based). After registering or logging in, include the token in every protected request:
 
-## License
+```
+Authorization: Bearer <your-token>
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## API Endpoints
+
+### Auth
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register a new user |
+| POST | `/api/auth/login` | Login and get token |
+| POST | `/api/auth/logout` | Revoke current token |
+
+### Orders
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/orders` | List orders (optional `?status=pending\|confirmed\|cancelled`) |
+| POST | `/api/orders` | Create a new order |
+| GET | `/api/orders/{id}` | Get a single order |
+| PUT | `/api/orders/{id}` | Update order status or items |
+| DELETE | `/api/orders/{id}` | Delete order (only if no payments) |
+
+### Payments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/orders/{id}/payments` | Process a payment for an order |
+| GET | `/api/orders/{id}/payments` | List payments for an order |
+| GET | `/api/payments` | List all payments |
+
+---
+
+## Adding a New Payment Gateway
+
+The system uses the **Strategy Pattern**. Adding a new gateway requires **3 steps only**:
+
+### Step 1 — Create the gateway class
+
+```php
+// app/Gateways/CryptoGateway.php
+
+namespace App\Gateways;
+
+use App\Contracts\PaymentGatewayInterface;
+
+class CryptoGateway implements PaymentGatewayInterface
+{
+    public function process(float $amount, array $context = []): array
+    {
+        // Call your crypto payment SDK here
+        // config('services.crypto.api_key') for credentials
+
+        return [
+            'status'           => 'successful',
+            'gateway_response' => [
+                'gateway'        => $this->getName(),
+                'transaction_id' => 'CRYPTO-' . uniqid(),
+                'amount'         => $amount,
+                'processed_at'   => now()->toISOString(),
+            ],
+        ];
+    }
+
+    public function getName(): string
+    {
+        return 'crypto'; // Must match the payment_method value sent in the request
+    }
+}
+```
+
+### Step 2 — Register it in the provider
+
+```php
+// app/Providers/PaymentGatewayServiceProvider.php
+
+$gateways = [
+    CreditCardGateway::class,
+    PaypalGateway::class,
+    StripeGateway::class,
+    CryptoGateway::class, // <-- add this line
+];
+```
+
+### Step 3 — Add the value to the migration enum
+
+```php
+// In a new migration:
+$table->enum('payment_method', ['credit_card', 'paypal', 'stripe', 'crypto']);
+```
+
+That's it. No changes to controllers, services, requests, or any other file.
+
+---
+
+## Gateway Configuration
+
+Store gateway credentials in `.env` and access via `config('services.*')`:
+
+```env
+STRIPE_SECRET=sk_test_...
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+```
+
+---
+
+## Business Rules
+
+- Orders are created with status `pending`
+- Payments can only be processed for `confirmed` orders
+- Orders with payments cannot be deleted
+- Total is always calculated server-side (not trusted from client)
+
+---
+
+## Project Structure
+
+```
+app/
+├── Contracts/PaymentGatewayInterface.php   ← Gateway contract
+├── Gateways/                               ← One class per gateway
+│   ├── CreditCardGateway.php
+│   ├── PaypalGateway.php
+│   └── StripeGateway.php
+├── Providers/PaymentGatewayServiceProvider.php  ← Gateway registry
+├── Services/
+│   ├── OrderService.php
+│   └── PaymentService.php
+├── Http/
+│   ├── Controllers/
+│   ├── Requests/
+│   └── Resources/
+└── Models/
+    ├── Order.php
+    ├── OrderItem.php
+    └── Payment.php
+```
