@@ -36,7 +36,9 @@ class OrderService
     public function update(Order $order, array $data): Order
     {
         return DB::transaction(function () use ($order, $data) {
-            $order->update(['status' => $data['status']]);
+            if (isset($data['status'])) {
+                $order->update(['status' => $data['status']]);
+            }
 
             if (isset($data['items'])) {
                 $order->items()->delete();

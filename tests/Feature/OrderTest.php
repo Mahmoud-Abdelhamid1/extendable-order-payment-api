@@ -35,8 +35,9 @@ class OrderTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('data.status', 'pending')
-            ->assertJsonPath('data.total', 45.00);
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertEquals(45.00, $response->json('data.total'));
 
         $this->assertDatabaseCount('order_items', 2);
     }
@@ -107,6 +108,7 @@ class OrderTest extends TestCase
             ],
         ]);
 
-        $response->assertJsonPath('data.total', 22.50);
+        $response->assertStatus(201);
+        $this->assertEquals(22.50, $response->json('data.total'));
     }
 }

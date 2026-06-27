@@ -66,7 +66,8 @@ class PaymentServiceTest extends TestCase
 
     public function test_mock_gateway_can_be_swapped_in(): void
     {
-        // Demonstrates how easy it is to swap a gateway in tests
+        // Demonstrates how easy it is to swap gateway logic in tests.
+        // getName() must return a value accepted by the payments.payment_method enum.
         $mockGateway = new class implements PaymentGatewayInterface {
             public function process(float $amount, array $context = []): array
             {
@@ -78,16 +79,18 @@ class PaymentServiceTest extends TestCase
 
             public function getName(): string
             {
-                return 'mock_gateway';
+                // Use a real enum value so the DB constraint is satisfied;
+                // the actual processing logic is fully replaced by this mock.
+                return 'credit_card';
             }
         };
 
-        $gateways               = app('payment.gateways');
-        $gateways['mock_gateway'] = $mockGateway;
+        $gateways                = app('payment.gateways');
+        $gateways['credit_card'] = $mockGateway;
         app()->instance('payment.gateways', $gateways);
 
         $order   = Order::factory()->confirmed()->create(['total' => 10.00]);
-        $payment = $this->service->process($order, 'mock_gateway');
+        $payment = $this->service->process($order, 'credit_card');
 
         $this->assertSame('successful', $payment->status);
         $this->assertSame('MOCK-001', $payment->gateway_response['transaction_id']);

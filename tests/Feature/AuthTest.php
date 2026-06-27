@@ -35,6 +35,17 @@ class AuthTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_register_requires_password_confirmation(): void
+    {
+        $this->postJson('/api/auth/register', [
+            'name'     => 'John Doe',
+            'email'    => 'john@example.com',
+            'password' => 'password123',
+            // missing password_confirmation
+        ])->assertStatus(422)
+          ->assertJsonValidationErrors(['password']);
+    }
+
     public function test_user_can_login(): void
     {
         User::factory()->create([
@@ -60,8 +71,18 @@ class AuthTest extends TestCase
 
     public function test_user_can_logout(): void
     {
-        $user = User::factory()->create();
+        $user  = User::factory()->create();
+        $token = $user->createToken('api-token')->plainTextToken;
 
-        $this->actingAs($user)->postJson('/api/auth/logout')->assertOk();
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+             ->postJson('/api/auth/logout')
+             ->assertOk()
+             ->assertJsonPath('message', 'Logged out successfully.');
+    }
+
+    public function test_unauthenticated_user_cannot_logout(): void
+    {
+        $this->postJson('/api/auth/logout')
+             ->assertUnauthorized();
     }
 }
